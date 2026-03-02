@@ -91,6 +91,30 @@ export interface FAQBase {
   match_keywords: string;
 }
 
+// Analytics interfaces
+export interface AnalyticsSummaryRow {
+  day: string; // iso date
+  event_type: string;
+  count: number;
+  tokens?: number;       // optional aggregated token count
+  cost?: number;         // optional aggregated estimated cost
+}
+
+export interface AnalyticsEvent {
+  id: number;
+  event_type: string;
+  guild_id: string | null;
+  channel_id: string | null;
+  user_id: string | null;
+  provider: string | null;
+  tokens_used: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  estimated_cost?: number | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
 export interface FAQCreate extends FAQBase {}
 
 export interface FAQResponse extends FAQBase {
@@ -122,6 +146,15 @@ export interface ChannelPromptBase {
 export interface ChannelPromptCreate extends ChannelPromptBase {}
 
 export interface ChannelPromptResponse extends ChannelPromptBase {}
+
+// Plugin system types
+export interface PluginInfo {
+  name: string;
+  version?: string;
+  author?: string;
+  description?: string;
+  enabled: number;
+}
 
 export const api = {
   // Auth
@@ -197,6 +230,40 @@ export const api = {
   // FAQs
   listFaqs: (token: string, guildId: string | null = null) =>
     apiFetch<FAQResponse[]>("/api/faqs" + (guildId ? `?guild_id=${guildId}` : ""), { token }),
+
+  // Analytics
+  getAnalyticsSummary: (token: string) =>
+    apiFetch<{ summary: AnalyticsSummaryRow[] }>("/api/analytics/summary", { token }),
+
+  getAnalyticsHistory: (token: string, limit: number = 1000) =>
+    apiFetch<{ history: AnalyticsEvent[] }>(
+      `/api/analytics/history?limit=${limit}`,
+      { token }
+    ),
+
+  // Quota & Rate Limiting
+  getQuotaStatus: (token: string) =>
+    apiFetch<{
+      rate_limit_user: number;
+      rate_limit_guild: number;
+      quotas: { users: Record<string, any>; guilds: Record<string, any> };
+    }>("/api/quota/status", { token }),
+
+  // Plugins
+  getPlugins: (token: string) =>
+    apiFetch<{ plugins: PluginInfo[] }>("/api/plugins", { token }),
+
+  enablePlugin: (token: string, name: string) =>
+    apiFetch<{ status: string }>(`/api/plugins/${name}/enable`, {
+      method: "POST",
+      token,
+    }),
+
+  disablePlugin: (token: string, name: string) =>
+    apiFetch<{ status: string }>(`/api/plugins/${name}/disable`, {
+      method: "POST",
+      token,
+    }),
 
   createFaq: (token: string, guildId: string, faq: FAQCreate) =>
     apiFetch<FAQResponse>(`/api/faqs?guild_id=${guildId}`, {

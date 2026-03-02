@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import discord
 from discord.ext import commands
+import time
 
 import config
 import providers
 import db as database
+from utils.rate_limiter import RateLimiter
+import plugins
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -21,10 +24,33 @@ class SparkSageBot(commands.Bot):
         messages = await database.get_messages(str(channel_id), limit=self.MAX_HISTORY)
         return [{"role": m["role"], "content": m["content"]} for m in messages]
 
-    async def ask_ai(self, channel_id: int, user_name: str, message: str, system_prompt: str = None, message_type: str = None) -> tuple[str, str]:
-        """Send a message to AI and return (response, provider_name)."""
+    async def ask_ai(
+        self,
+        channel_id: int,
+        user_name: str,
+        message: str,
+        system_prompt: str = None,
+        message_type: str | None = None,
+    ) -> tuple[str, str]:
+        """Send a message to AI and return (response, provider_name).
+
+        ``message_type`` is an arbitrary tag (e.g. "command", "mention", "translation",
+        etc.) that will be recorded in analytics.
+        """
         # Store user message in DB
         await database.add_message(str(channel_id), "user", user_name, message, type=message_type)
+
+        # Get guild_id from channel for rate limiting
+        guild_id = None
+        chan = self.get_channel(int(channel_id)) if channel_id else None
+        if chan and hasattr(chan, "guild") and chan.guild:
+            guild_id = str(chan.guild.id)
+
+        # Check rate limit
+        if config.RATE_LIMITING_ENABLED and hasattr(self, "rate_limiter"):
+            allowed, reason = self.rate_limiter.is_allowed(user_name, guild_id)
+            if not allowed:
+                return f"⏱️ Rate limited: {reason}", "none"
 
         history = await self.get_history(channel_id)
 
@@ -35,11 +61,43 @@ class SparkSageBot(commands.Bot):
         # Get channel-specific provider if available
         channel_provider_override = await database.get_channel_provider(str(channel_id))
 
+        # Measure latency for analytics
+        start = time.time()
         try:
-            response, provider_name = providers.chat(history, final_system_prompt, primary_provider=channel_provider_override)
+            response, provider_name, input_toks, output_toks, total_toks = providers.chat(
+                history, final_system_prompt, primary_provider=channel_provider_override
+            )
+            latency_ms = int((time.time() - start) * 1000)
             # Store assistant response in DB
-            await database.add_message(str(channel_id), "assistant", self.user.display_name, response, provider=provider_name, type=message_type)
+            await database.add_message(
+                str(channel_id),
+                "assistant",
+                self.user.display_name,
+                response,
+                provider=provider_name,
+                type=message_type,
+            )
+
+            # estimate cost based on configured pricing (dollars per 1k tokens)
+            price_per_1k = config.PROVIDERS.get(provider_name, {}).get("price_per_1k_tokens", 0) or 0
+            estimated_cost = (total_toks / 1000) * price_per_1k
+
+            # record analytics event including token usage and cost
+            await database.add_analytics_event(
+                event_type=message_type or "ai_call",
+                guild_id=guild_id,
+                channel_id=str(channel_id),
+                user_id=user_name,
+                provider=provider_name,
+                tokens_used=total_toks,
+                input_tokens=input_toks,
+                output_tokens=output_toks,
+                estimated_cost=estimated_cost,
+                latency_ms=latency_ms,
+            )
+
             return response, provider_name
+
         except RuntimeError as e:
             return f"Sorry, all AI providers failed:\n{e}", "none"
 
@@ -56,9 +114,20 @@ class SparkSageBot(commands.Bot):
         await self.load_extension("cogs.translate")
         await self.load_extension("cogs.channel_prompts")
         await self.load_extension("cogs.channel_providers")
+        # management cog for enabling/disabling plugins
+        await self.load_extension("cogs.plugins")
+        # load any community plugins
+        await plugins.load_plugins(self)
 
 
 bot = SparkSageBot(command_prefix=config.BOT_PREFIX, intents=intents)
+
+# Initialize rate limiter
+if config.RATE_LIMITING_ENABLED:
+    bot.rate_limiter = RateLimiter(
+        user_rate=config.RATE_LIMIT_USER,
+        guild_rate=config.RATE_LIMIT_GUILD,
+    )
 
 
 def get_bot_status() -> dict:
@@ -114,8 +183,11 @@ async def on_message(message: discord.Message):
             clean_content = "Hello!"
 
         async with message.channel.typing():
-            response, provider_name = await bot.ask_ai( # Use bot.ask_ai
-                message.channel.id, message.author.display_name, clean_content
+            response, provider_name = await bot.ask_ai(
+                message.channel.id,
+                message.author.display_name,
+                clean_content,
+                message_type="mention",
             )
 
         # Split long responses (Discord 2000 char limit)

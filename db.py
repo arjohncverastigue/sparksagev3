@@ -101,6 +101,32 @@ async def init_db():
             guild_id TEXT NOT NULL,
             provider_name TEXT NOT NULL
         );
+
+        -- analytics table (Phase 5 feature)
+        CREATE TABLE IF NOT EXISTS analytics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,     -- 'command', 'mention', 'faq', 'moderation', etc.
+            guild_id TEXT,
+            channel_id TEXT,
+            user_id TEXT,
+            provider TEXT,
+            tokens_used INTEGER,          -- total tokens (input + output)
+            input_tokens INTEGER,         -- prompt tokens only
+            output_tokens INTEGER,        -- completion tokens only
+            estimated_cost REAL,          -- approximate cost in dollars
+            latency_ms INTEGER,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS plugins (
+            name TEXT PRIMARY KEY,
+            version TEXT,
+            author TEXT,
+            description TEXT,
+            cog_path TEXT NOT NULL,
+            manifest_path TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 0
+        );
         """
     )
     cursor = await db.execute("PRAGMA table_info(conversations)")
@@ -109,6 +135,16 @@ async def init_db():
         await db.execute("ALTER TABLE conversations ADD COLUMN type TEXT")
     if "author_name" not in columns:
         await db.execute("ALTER TABLE conversations ADD COLUMN author_name TEXT")
+
+    # migrations for analytics table (added Phase 5.4)
+    cursor = await db.execute("PRAGMA table_info(analytics)")
+    columns = [row[1] for row in await cursor.fetchall()]
+    if "input_tokens" not in columns:
+        await db.execute("ALTER TABLE analytics ADD COLUMN input_tokens INTEGER")
+    if "output_tokens" not in columns:
+        await db.execute("ALTER TABLE analytics ADD COLUMN output_tokens INTEGER")
+    if "estimated_cost" not in columns:
+        await db.execute("ALTER TABLE analytics ADD COLUMN estimated_cost REAL")
 
     await db.commit()
 
@@ -148,6 +184,66 @@ async def set_config_bulk(data: dict[str, str]):
     await db.executemany(
         "INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         list(data.items()),
+    )
+    await db.commit()
+
+# --- Plugin helpers ---
+
+async def list_plugins() -> list[dict]:
+    """Return all known plugins with metadata."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT name, version, author, description, cog_path, manifest_path, enabled FROM plugins"
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
+
+async def get_plugin(name: str) -> dict | None:
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT name, version, author, description, cog_path, manifest_path, enabled FROM plugins WHERE name = ?",
+        (name,),
+    )
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+async def set_plugin_enabled(name: str, enabled: bool):
+    db = await get_db()
+    # We can't rely on a row already existing because new plugins may be
+    # enabled before the metadata was persisted.  The table enforces
+    # NOT NULL on cog_path/manifest_path, so provide empty strings so the
+    # INSERT succeeds and then update the enabled flag.
+    await db.execute(
+        "INSERT OR IGNORE INTO plugins (name, version, author, description, cog_path, manifest_path, enabled) \
+         VALUES (?, '', '', '', '', '', ?)",
+        (name, 1 if enabled else 0),
+    )
+    await db.execute(
+        "UPDATE plugins SET enabled = ? WHERE name = ?",
+        (1 if enabled else 0, name),
+    )
+    await db.commit()
+
+async def upsert_plugin(manifest: dict, cog_path: str, manifest_path: str):
+    """Insert or update plugin metadata derived from a manifest."""
+    db = await get_db()
+    await db.execute(
+        "INSERT INTO plugins (name, version, author, description, cog_path, manifest_path) \
+         VALUES (?, ?, ?, ?, ?, ?) \
+         ON CONFLICT(name) DO UPDATE SET \
+             version = excluded.version, \
+             author = excluded.author, \
+             description = excluded.description, \
+             cog_path = excluded.cog_path, \
+             manifest_path = excluded.manifest_path",
+        (
+            manifest.get("name"),
+            manifest.get("version"),
+            manifest.get("author"),
+            manifest.get("description"),
+            cog_path,
+            manifest_path,
+        ),
     )
     await db.commit()
 
@@ -498,3 +594,79 @@ async def close_db():
     if _db:
         await _db.close()
         _db = None
+
+
+# --- Analytics helpers ---
+
+async def add_analytics_event(
+    event_type: str,
+    guild_id: str | None = None,
+    channel_id: str | None = None,
+    user_id: str | None = None,
+    provider: str | None = None,
+    tokens_used: int | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    estimated_cost: float | None = None,
+    latency_ms: int | None = None,
+):
+    """Record an analytics event in the database.
+
+    ``tokens_used`` is the total tokens (input + output); the additional fields
+    allow splitting and storing an estimated cost. All new columns are optional
+    for backwards compatibility with existing data.
+    """
+    db = await get_db()
+    await db.execute(
+        """
+        INSERT INTO analytics
+            (event_type, guild_id, channel_id, user_id, provider,
+             tokens_used, input_tokens, output_tokens, estimated_cost, latency_ms)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            event_type,
+            guild_id,
+            channel_id,
+            user_id,
+            provider,
+            tokens_used,
+            input_tokens,
+            output_tokens,
+            estimated_cost,
+            latency_ms,
+        ),
+    )
+    await db.commit()
+
+
+async def get_analytics_summary() -> list[dict]:
+    """Return summary counts grouped by day and event_type.
+
+    New in Phase 5.4: also aggregate token usage and estimated cost.
+    """
+    db = await get_db()
+    cursor = await db.execute(
+        """
+        SELECT date(created_at) AS day,
+               event_type,
+               COUNT(*) AS count,
+               COALESCE(SUM(tokens_used),0) AS tokens,
+               COALESCE(SUM(estimated_cost),0) AS cost
+        FROM analytics
+        GROUP BY day, event_type
+        ORDER BY day DESC
+        """
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+async def get_analytics_history(limit: int = 1000) -> list[dict]:
+    """Return recent analytics events."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM analytics ORDER BY created_at DESC LIMIT ?", (limit,)
+    )
+    rows = await cursor.fetchall()
+    return [dict(row) for row in rows]

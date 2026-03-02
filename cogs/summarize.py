@@ -22,7 +22,10 @@ class Summarize(commands.Cog):
 
         summary_prompt = "Please summarize the key points from this conversation so far in a concise bullet-point format."
         response, provider_name = await self.bot.ask_ai(
-            interaction.channel_id, interaction.user.display_name, summary_prompt
+            interaction.channel_id,
+            interaction.user.display_name,
+            summary_prompt,
+            message_type="command",
         )
         await interaction.followup.send(f"""**Conversation Summary:**
 {response}""")

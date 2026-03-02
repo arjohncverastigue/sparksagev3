@@ -24,9 +24,13 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-r1:free")
 # Paid providers (optional)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+# cost in dollars per 1k tokens (for analytics)
+ANTHROPIC_PRICE = float(os.getenv("ANTHROPIC_PRICE", "0.0"))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# cost in dollars per 1k tokens
+OPENAI_PRICE = float(os.getenv("OPENAI_PRICE", "0.0"))
 
 # Bot settings
 BOT_PREFIX = os.getenv("BOT_PREFIX", "!")
@@ -51,6 +55,14 @@ DIGEST_ENABLED = os.getenv("DIGEST_ENABLED", "False").lower() == "true"
 MODERATION_ENABLED = os.getenv("MODERATION_ENABLED", "False").lower() == "true"
 MOD_LOG_CHANNEL_ID = os.getenv("MOD_LOG_CHANNEL_ID", "")
 MODERATION_SENSITIVITY = os.getenv("MODERATION_SENSITIVITY", "medium")
+
+# Rate limiting settings (requests per minute)
+RATE_LIMIT_USER = int(os.getenv("RATE_LIMIT_USER", "30"))  # 30 requests/min per user
+RATE_LIMIT_GUILD = int(os.getenv("RATE_LIMIT_GUILD", "100"))  # 100 requests/min per guild
+RATE_LIMITING_ENABLED = os.getenv("RATE_LIMITING_ENABLED", "True").lower() == "true"
+
+# Cost tracking settings
+COST_ALERT_THRESHOLD = float(os.getenv("COST_ALERT_THRESHOLD", "50.0"))  # Alert when monthly cost approaches $50
 
 # Dashboard settings
 DATABASE_PATH = os.getenv("DATABASE_PATH", "sparksage.db")
@@ -91,6 +103,7 @@ def _build_providers() -> dict:
             "api_key": ANTHROPIC_API_KEY,
             "model": ANTHROPIC_MODEL,
             "free": False,
+            "price_per_1k_tokens": ANTHROPIC_PRICE,
         },
         "openai": {
             "name": "OpenAI",
@@ -98,6 +111,7 @@ def _build_providers() -> dict:
             "api_key": OPENAI_API_KEY,
             "model": OPENAI_MODEL,
             "free": False,
+            "price_per_1k_tokens": OPENAI_PRICE,
         },
     }
 
@@ -124,8 +138,10 @@ def reload_from_db(db_config: dict[str, str]):
         "OPENROUTER_MODEL": str,
         "ANTHROPIC_API_KEY": str,
         "ANTHROPIC_MODEL": str,
+        "ANTHROPIC_PRICE": float,
         "OPENAI_API_KEY": str,
         "OPENAI_MODEL": str,
+        "OPENAI_PRICE": float,
         "BOT_PREFIX": str,
         "MAX_TOKENS": int,
         "SYSTEM_PROMPT": str,
@@ -138,6 +154,10 @@ def reload_from_db(db_config: dict[str, str]):
         "MODERATION_ENABLED": lambda v: v.lower() == "true",
         "MOD_LOG_CHANNEL_ID": str,
         "MODERATION_SENSITIVITY": str,
+        "RATE_LIMIT_USER": int,
+        "RATE_LIMIT_GUILD": int,
+        "RATE_LIMITING_ENABLED": lambda v: v.lower() == "true",
+        "COST_ALERT_THRESHOLD": float,
         "ADMIN_PASSWORD": str,
         "DISCORD_CLIENT_ID": str,
         "DISCORD_CLIENT_SECRET": str,

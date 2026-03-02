@@ -96,11 +96,22 @@ def test_provider(name: str) -> dict:
         return {"success": False, "latency_ms": latency, "error": str(e)}
 
 
-def chat(messages: list[dict], system_prompt: str, primary_provider: str | None = None) -> tuple[str, str]:
-    """Send messages to AI and return (response_text, provider_name).
+def chat(
+    messages: list[dict],
+    system_prompt: str,
+    primary_provider: str | None = None,
+) -> tuple[str, str, int, int, int]:
+    """Send messages to AI and return response and token usage.
+
+    The returned tuple is
+        (response_text, provider_name, input_tokens, output_tokens, total_tokens)
 
     Tries the primary_provider first if specified, then falls back through configured providers.
     Raises RuntimeError if all providers fail.
+
+    Token counts are pulled from the provider's ``usage`` field when available so
+    they can later be recorded in analytics. Cost computation is performed by the
+    caller based on provider-specific pricing configured in ``config.PROVIDERS``.
     """
     errors = []
     
@@ -129,7 +140,22 @@ def chat(messages: list[dict], system_prompt: str, primary_provider: str | None 
                 ],
             )
             text = response.choices[0].message.content
-            return text, provider_name
+
+            # attempt to pull token usage info (support dicts and attribute-style objects)
+            usage = getattr(response, "usage", None)
+
+            def _usage_get(u, key):
+                if not u:
+                    return None
+                if isinstance(u, dict):
+                    return u.get(key)
+                return getattr(u, key, None)
+
+            input_toks = _usage_get(usage, "prompt_tokens") or _usage_get(usage, "promptTokens") or 0
+            output_toks = _usage_get(usage, "completion_tokens") or _usage_get(usage, "completionTokens") or 0
+            total_toks = _usage_get(usage, "total_tokens") or _usage_get(usage, "totalTokens") or (input_toks + output_toks)
+
+            return text, provider_name, input_toks, output_toks, total_toks
 
         except Exception as e:
             errors.append(f"{provider['name']}: {e}")

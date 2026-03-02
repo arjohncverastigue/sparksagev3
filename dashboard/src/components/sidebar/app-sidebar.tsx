@@ -12,8 +12,10 @@ import {
   Wand2,
   LogOut,
   HelpCircle,
-  ShieldCheck, // New import for Permissions icon
-  PenTool, // New import for Channel Prompts icon
+  ShieldCheck,
+  PenTool,
+  Activity,
+  Puzzle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -28,6 +30,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_ITEMS = [
   { title: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -38,6 +41,9 @@ const NAV_ITEMS = [
   { title: "Permissions", href: "/dashboard/permissions", icon: ShieldCheck }, // New Permissions item
   { title: "Channel Prompts", href: "/dashboard/channel_prompts", icon: PenTool }, // New Channel Prompts item
   { title: "Channel Providers", href: "/dashboard/channel_providers", icon: Cpu }, // New Channel Providers item
+  { title: "Analytics", href: "/dashboard/analytics", icon: LayoutDashboard }, // analytics placeholder icon
+  { title: "Quota", href: "/dashboard/quota", icon: Activity }, // Rate limiting & quotas
+  { title: "Plugins", href: "/dashboard/plugins", icon: Puzzle }, // Community extensions
 ];
 
 export function AppSidebar() {
@@ -46,11 +52,14 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Zap className="h-4 w-4" />
+        <div className="flex items-center justify-between gap-2 px-2 py-1">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Zap className="h-4 w-4" />
+            </div>
+            <span className="font-semibold">SparkSage</span>
           </div>
-          <span className="font-semibold">SparkSage</span>
+          <ThemeToggle />
         </div>
       </SidebarHeader>
       <SidebarContent>

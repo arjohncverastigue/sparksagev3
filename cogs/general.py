@@ -17,7 +17,10 @@ class General(commands.Cog):
     async def ask(self, interaction: discord.Interaction, question: str):
         await interaction.response.defer()
         response, provider_name = await self.bot.ask_ai(
-            interaction.channel_id, interaction.user.display_name, question
+            interaction.channel_id,
+            interaction.user.display_name,
+            question,
+            message_type="command",
         )
         provider_label = config.PROVIDERS.get(provider_name, {}).get("name", provider_name)
         footer = f"-# Powered by {provider_label}"
