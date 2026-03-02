@@ -49,6 +49,7 @@ export default function ChannelPromptManagementPage() {
   const { toast } = useToast();
 
   const [channelPrompts, setChannelPrompts] = useState<ChannelPromptResponse[]>([]);
+  const [channelNames, setChannelNames] = useState<Record<string,string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,9 +57,9 @@ export default function ChannelPromptManagementPage() {
   const [newSystemPrompt, setNewSystemPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // TODO: Implement proper guild selection. For now, hardcode or assume a default.
-  // This needs to be dynamic based on the connected bot's guilds.
-  const GUILD_ID = "YOUR_GUILD_ID_HERE"; // Placeholder
+  // TODO: Implement proper guild selection. For now we default to the first available guild
+  // returned by the bot status endpoint.
+  const [guildId, setGuildId] = useState<string>("");
 
   const token = (session as { accessToken?: string })?.accessToken;
 
@@ -68,11 +69,52 @@ export default function ChannelPromptManagementPage() {
       return;
     }
 
+    const loadGuildInfo = async () => {
+      try {
+        const status = await api.getBotStatus(token);
+        if (status.guilds && status.guilds.length > 0) {
+          setGuildId(status.guilds[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to fetch bot status for guild id", e);
+      }
+    };
+
     const fetchChannelPrompts = async () => {
       try {
         setLoading(true);
-        const response = await api.listChannelPrompts(token); // Assuming no guild_id filter needed for now at API level
-        setChannelPrompts(response.channel_prompts);
+        const response = await api.listChannelPrompts(token);
+        // discard any entries that still use the placeholder or non-numeric guild IDs
+        const validPrompts = response.channel_prompts.filter((p) => /^\d+$/.test(p.guild_id));
+        if (validPrompts.length !== response.channel_prompts.length) {
+          toast({
+            title: "Warning",
+            description: "Some channel prompts had invalid guild IDs and were ignored. Please re-create them with a valid guild.",
+            variant: "destructive",
+          });
+        }
+        setChannelPrompts(validPrompts);
+
+        // fetch channel names for each guild involved (ignore non-numeric ids)
+        const guildIds = Array.from(
+          new Set(
+            response.channel_prompts
+              .map((p) => p.guild_id)
+              .filter((id) => /^\d+$/.test(id))
+          )
+        );
+        const namesMap: Record<string,string> = {};
+        for (const gid of guildIds) {
+          try {
+            const chanResp = await api.listGuildChannels(token, gid);
+            chanResp.channels.forEach((c) => {
+              namesMap[c.id] = c.name;
+            });
+          } catch (e) {
+            console.error("Failed to fetch channels for guild", gid, e);
+          }
+        }
+        setChannelNames((prev) => ({ ...prev, ...namesMap }));
       } catch (err) {
         setError("Failed to fetch channel prompts.");
         console.error("Failed to fetch channel prompts:", err);
@@ -86,11 +128,12 @@ export default function ChannelPromptManagementPage() {
       }
     };
 
+    loadGuildInfo();
     fetchChannelPrompts();
   }, [token, toast]);
 
   const handleAddChannelPrompt = async () => {
-    if (!token || !GUILD_ID || !newChannelId || !newSystemPrompt) {
+    if (!token || !guildId || !newChannelId || !newSystemPrompt) {
       toast({
         title: "Error",
         description: "Please fill in all fields for the new channel prompt.",
@@ -103,11 +146,21 @@ export default function ChannelPromptManagementPage() {
     try {
       const newPrompt = {
         channel_id: newChannelId,
-        guild_id: GUILD_ID, // Use the placeholder GUILD_ID
+        guild_id: guildId,
         system_prompt: newSystemPrompt,
       };
       await api.createChannelPrompt(token, newPrompt);
       setChannelPrompts((prev) => [...prev, newPrompt]); // Add to local state
+      // attempt to fetch channel name and update map
+      try {
+        const chanResp = await api.listGuildChannels(token, newPrompt.guild_id);
+        const ch = chanResp.channels.find((c) => c.id === newPrompt.channel_id);
+        if (ch) {
+          setChannelNames((prev) => ({ ...prev, [ch.id]: ch.name }));
+        }
+      } catch (e) {
+        console.error("couldn't fetch name for new channel prompt", e);
+      }
       setNewChannelId("");
       setNewSystemPrompt("");
       toast({
@@ -239,7 +292,7 @@ export default function ChannelPromptManagementPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[180px]">Channel ID</TableHead>
+                <TableHead className="w-[180px]">Channel</TableHead>
                 <TableHead className="w-[180px]">Guild ID</TableHead>
                 <TableHead>System Prompt</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -248,7 +301,11 @@ export default function ChannelPromptManagementPage() {
             <TableBody>
               {channelPrompts.map((prompt) => (
                 <TableRow key={prompt.channel_id}>
-                  <TableCell className="font-medium">{prompt.channel_id}</TableCell>
+                  <TableCell className="font-medium">
+                    {channelNames[prompt.channel_id]
+                      ? `${channelNames[prompt.channel_id]} (${prompt.channel_id})`
+                      : prompt.channel_id}
+                  </TableCell>
                   <TableCell>{prompt.guild_id}</TableCell>
                   <TableCell>{prompt.system_prompt.length > 70 ? `${prompt.system_prompt.slice(0, 70)}...` : prompt.system_prompt}</TableCell>
                   <TableCell className="text-right">

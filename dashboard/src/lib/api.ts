@@ -55,6 +55,16 @@ export interface ChannelItem {
   last_active: string;
 }
 
+// Channel list returned by new guild-channel API
+export interface ChannelInfo {
+  id: string;
+  name: string;
+}
+
+export interface ChannelListResponse {
+  channels: ChannelInfo[];
+}
+
 export interface MessageItem {
   role: string;
   content: string;
@@ -298,6 +308,10 @@ export const api = {
   // Channel Prompts
   listChannelPrompts: (token: string) =>
     apiFetch<{ channel_prompts: ChannelPromptResponse[] }>("/api/config/channel_prompts", { token }),
+  
+  // guild channel listing (used for display names)
+  listGuildChannels: (token: string, guildId: string) =>
+    apiFetch<ChannelListResponse>(`/api/bot/guilds/${guildId}/channels`, { token }),
   
   createChannelPrompt: (token: string, prompt: ChannelPromptCreate) =>
     apiFetch<{ status: string }>("/api/config/channel_prompts", {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import discord
 from discord.ext import commands
 import time
+import asyncio
 
 import config
 import providers
@@ -64,8 +65,10 @@ class SparkSageBot(commands.Bot):
         # Measure latency for analytics
         start = time.time()
         try:
-            response, provider_name, input_toks, output_toks, total_toks = providers.chat(
-                history, final_system_prompt, primary_provider=channel_provider_override
+            # providers.chat is a blocking, synchronous call (uses HTTP clients).
+            # Run it in a thread to avoid blocking the bot's asyncio event loop.
+            response, provider_name, input_toks, output_toks, total_toks = await asyncio.to_thread(
+                providers.chat, history, final_system_prompt, channel_provider_override
             )
             latency_ms = int((time.time() - start) * 1000)
             # Store assistant response in DB

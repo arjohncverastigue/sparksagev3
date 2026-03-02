@@ -340,6 +340,7 @@ async def setup(bot):
 2. Modify `ask_ai()` in `bot.py` to check for channel-specific prompts before falling back to the global system prompt
 3. Add `/prompt set <text>` and `/prompt reset` commands
 4. Add API endpoints and dashboard UI for per-channel prompt management
+   - The dashboard table should display human-readable channel names (queried from the bot via a new endpoint) instead of raw numeric IDs.
 
 ---
 

@@ -7,16 +7,32 @@ import aiosqlite
 DATABASE_PATH = os.getenv("DATABASE_PATH", "sparksage.db")
 
 _db: aiosqlite.Connection | None = None
+# remember the path used to open the current connection. If the environment
+# variable changes (as in tests), we need to close and reopen so we don't
+# accidentally reuse the wrong file.
+_last_db_path: str | None = None
 
 
 async def get_db() -> aiosqlite.Connection:
-    """Return the shared database connection, creating it if needed."""
-    global _db
-    if _db is None:
+    """Return the shared database connection, creating it if needed.
+
+    If the DATABASE_PATH environment variable has changed since the last call,
+    close the existing connection and open a new one. This is primarily to make
+    unit tests reliable when they swap out ``DATABASE_PATH`` between cases.
+    """
+    global _db, _last_db_path
+    if _db is None or _last_db_path != DATABASE_PATH:
+        # close previous connection if open
+        if _db is not None:
+            try:
+                await _db.close()
+            except Exception:
+                pass
         _db = await aiosqlite.connect(DATABASE_PATH)
         _db.row_factory = aiosqlite.Row
         await _db.execute("PRAGMA journal_mode=WAL")
         await _db.execute("PRAGMA foreign_keys=ON")
+        _last_db_path = DATABASE_PATH
     return _db
 
 

@@ -57,6 +57,7 @@ export default function ChannelProviderManagementPage() {
   const { toast } = useToast();
 
   const [channelProviders, setChannelProviders] = useState<ChannelProviderResponse[]>([]);
+  const [channelNames, setChannelNames] = useState<Record<string,string>>({});
   const [allProviders, setAllProviders] = useState<ProviderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +66,8 @@ export default function ChannelProviderManagementPage() {
   const [newProviderName, setNewProviderName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // TODO: Implement proper guild selection. For now, hardcode or assume a default.
-  // This needs to be dynamic based on the connected bot's guilds.
-  const GUILD_ID = "YOUR_GUILD_ID_HERE"; // Placeholder
+  // TODO: Implement proper guild selection. For now, default to first guild returned by bot status.
+  const [guildId, setGuildId] = useState<string>("");
 
   const token = (session as { accessToken?: string })?.accessToken;
 
@@ -77,12 +77,50 @@ export default function ChannelProviderManagementPage() {
       return;
     }
 
+    const loadGuildInfo = async () => {
+      try {
+        const status = await api.getBotStatus(token);
+        if (status.guilds && status.guilds.length > 0) {
+          setGuildId(status.guilds[0].id);
+        }
+      } catch (e) {
+        console.error("Failed to fetch bot status for guild id", e);
+      }
+    };
+
     const fetchAllData = async () => {
       try {
         setLoading(true);
         // Fetch all channel providers
         const channelProvidersResponse = await api.listChannelProviders(token);
-        setChannelProviders(channelProvidersResponse.channel_providers);
+        const validProviders = channelProvidersResponse.channel_providers.filter((p) => /^\d+$/.test(p.guild_id));
+        if (validProviders.length !== channelProvidersResponse.channel_providers.length) {
+          toast({
+            title: "Warning",
+            description: "Some channel providers had invalid guild IDs and were ignored. Please re-create them with a valid guild.",
+            variant: "destructive",
+          });
+        }
+        setChannelProviders(validProviders);
+
+        // fetch channel names for each valid guild involved
+        const guildIds = Array.from(new Set(
+          channelProvidersResponse.channel_providers
+            .map((p) => p.guild_id)
+            .filter((id) => /^\d+$/.test(id))
+        ));
+        const namesMap: Record<string,string> = {};
+        for (const gid of guildIds) {
+          try {
+            const chanResp = await api.listGuildChannels(token, gid);
+            chanResp.channels.forEach((c) => {
+              namesMap[c.id] = c.name;
+            });
+          } catch (e) {
+            console.error("Failed to fetch channels for guild", gid, e);
+          }
+        }
+        setChannelNames((prev) => ({ ...prev, ...namesMap }));
 
         // Fetch all available AI providers for the select dropdown
         const providersResponse = await api.getProviders(token);
@@ -100,11 +138,12 @@ export default function ChannelProviderManagementPage() {
       }
     };
 
+    loadGuildInfo();
     fetchAllData();
   }, [token, toast]);
 
   const handleAddChannelProvider = async () => {
-    if (!token || !GUILD_ID || !newChannelId || !newProviderName) {
+    if (!token || !guildId || !newChannelId || !newProviderName) {
       toast({
         title: "Error",
         description: "Please fill in all fields for the new channel provider.",
@@ -117,11 +156,21 @@ export default function ChannelProviderManagementPage() {
     try {
       const newProvider = {
         channel_id: newChannelId,
-        guild_id: GUILD_ID, // Use the placeholder GUILD_ID
+        guild_id: guildId,
         provider_name: newProviderName,
       };
       await api.createChannelProvider(token, newProvider);
       setChannelProviders((prev) => [...prev, newProvider]); // Add to local state
+      // update channel name map for the new entry
+      try {
+        const chanResp = await api.listGuildChannels(token, newProvider.guild_id);
+        const ch = chanResp.channels.find((c) => c.id === newProvider.channel_id);
+        if (ch) {
+          setChannelNames((prev) => ({ ...prev, [ch.id]: ch.name }));
+        }
+      } catch (e) {
+        console.error("couldn't fetch name for new channel provider", e);
+      }
       setNewChannelId("");
       setNewProviderName("");
       toast({
@@ -258,7 +307,7 @@ export default function ChannelProviderManagementPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[180px]">Channel ID</TableHead>
+                <TableHead className="w-[180px]">Channel</TableHead>
                 <TableHead className="w-[180px]">Guild ID</TableHead>
                 <TableHead>Provider Name</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -267,7 +316,11 @@ export default function ChannelProviderManagementPage() {
             <TableBody>
               {channelProviders.map((provider) => (
                 <TableRow key={provider.channel_id}>
-                  <TableCell className="font-medium">{provider.channel_id}</TableCell>
+                  <TableCell className="font-medium">
+                    {channelNames[provider.channel_id]
+                      ? `${channelNames[provider.channel_id]} (${provider.channel_id})`
+                      : provider.channel_id}
+                  </TableCell>
                   <TableCell>{provider.guild_id}</TableCell>
                   <TableCell>{provider.provider_name}</TableCell>
                   <TableCell className="text-right">

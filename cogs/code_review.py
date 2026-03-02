@@ -38,7 +38,20 @@ class CodeReview(commands.Cog):
             system_prompt=system_prompt, # Pass specialized system prompt
             message_type="code_review" # Tag this as a code review
         )
-        await interaction.followup.send(response)
+
+        # send the response in chunks in case it's longer than Discord's 2000 char limit
+        try:
+            for i in range(0, len(response), 2000):
+                await interaction.followup.send(response[i : i + 2000])
+        except Exception as send_err:
+            # log and inform the user
+            print(f"/review followup send error: {send_err}")
+            try:
+                await interaction.followup.send(
+                    "⚠️ Failed to deliver code review. Please try again later."
+                )
+            except Exception:
+                pass
 
 async def setup(bot):
     await bot.add_cog(CodeReview(bot))
