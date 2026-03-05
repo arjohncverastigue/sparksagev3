@@ -46,6 +46,9 @@ const settingsSchema = z.object({
   MODERATION_ENABLED: z.boolean(),
   MOD_LOG_CHANNEL_ID: z.string().optional(),
   MODERATION_SENSITIVITY: z.enum(["low", "medium", "high"]),
+  AUTO_TRANSLATE_ENABLED: z.boolean(),
+  AUTO_TRANSLATE_CHANNELS: z.string().optional(), // Store as comma-separated string
+  DEFAULT_TRANSLATION_LANGUAGE: z.string().min(1, "Default translation language is required"),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -71,6 +74,9 @@ const DEFAULTS: SettingsForm = {
   MODERATION_ENABLED: false,
   MOD_LOG_CHANNEL_ID: "",
   MODERATION_SENSITIVITY: "medium",
+  AUTO_TRANSLATE_ENABLED: false,
+  AUTO_TRANSLATE_CHANNELS: "",
+  DEFAULT_TRANSLATION_LANGUAGE: "English",
 };
 
 export default function SettingsPage() {
@@ -95,9 +101,17 @@ export default function SettingsPage() {
           if (config[key] !== undefined) {
             if (key === "MAX_TOKENS") {
               mapped[key] = Number(config[key]);
-            } else if (key === "WELCOME_ENABLED" || key === "DIGEST_ENABLED" || key === "MODERATION_ENABLED") {
-                mapped[key] = config[key] === "True";
-            } else {
+            } else if (
+              key === "WELCOME_ENABLED" ||
+              key === "DIGEST_ENABLED" ||
+              key === "MODERATION_ENABLED" ||
+              key === "AUTO_TRANSLATE_ENABLED" // Handle new boolean
+            ) {
+              mapped[key] = config[key] === "True";
+            } else if (key === "AUTO_TRANSLATE_CHANNELS") { // Handle new array/string field
+                mapped[key] = config[key] ? config[key].toString() : "";
+            }
+             else {
               (mapped as Record<string, string>)[key] = config[key];
             }
           }
@@ -112,16 +126,23 @@ export default function SettingsPage() {
     if (!token) return;
     setSaving(true);
     try {
-      // Convert to string values for the API, skip masked values (***...)
-      const payload: Record<string, string> = {};
-      for (const [key, val] of Object.entries(values)) {
-        // Special handling for boolean fields
-        if (key === "WELCOME_ENABLED" || key === "DIGEST_ENABLED" || key === "MODERATION_ENABLED") {
-            payload[key] = (val as boolean) ? "True" : "False";
-        } else if (!String(val).startsWith("***")) { // Check for masked string values
-          payload[key] = String(val);
-        }
-      }
+                // Convert to string values for the API, skip masked values (***...)
+                const payload: Record<string, string> = {};
+                for (const [key, val] of Object.entries(values)) {
+                  // Special handling for boolean fields
+                  if (
+                    key === "WELCOME_ENABLED" ||
+                    key === "DIGEST_ENABLED" ||
+                    key === "MODERATION_ENABLED" ||
+                    key === "AUTO_TRANSLATE_ENABLED"
+                  ) {
+                    payload[key] = (val as boolean) ? "True" : "False";
+                  } else if (!String(val).startsWith("***")) {
+                    // Convert numbers to string and handle other values
+                    payload[key] = String(val);
+                  }
+                }
+      
       await api.updateConfig(token, payload);
       toast.success("Settings saved successfully");
     } catch (err) {
@@ -382,6 +403,56 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Auto-Translation Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Auto-Translation</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="auto-translate-enabled">Enable Auto-Translation</Label>
+              <Switch
+                id="auto-translate-enabled"
+                checked={form.watch("AUTO_TRANSLATE_ENABLED")}
+                onCheckedChange={(checked) => form.setValue("AUTO_TRANSLATE_ENABLED", checked)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="auto-translate-channels">Auto-Translate Channel IDs</Label>
+              <Textarea
+                id="auto-translate-channels"
+                {...form.register("AUTO_TRANSLATE_CHANNELS")}
+                rows={2}
+                placeholder="e.g., 1234567890,9876543210"
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated list of channel IDs where messages will be automatically translated.
+              </p>
+              {form.formState.errors.AUTO_TRANSLATE_CHANNELS && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.AUTO_TRANSLATE_CHANNELS.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="default-translation-language">Default Translation Language</Label>
+              <Input
+                id="default-translation-language"
+                {...form.register("DEFAULT_TRANSLATION_LANGUAGE")}
+                placeholder="e.g., English"
+              />
+              {form.formState.errors.DEFAULT_TRANSLATION_LANGUAGE && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.DEFAULT_TRANSLATION_LANGUAGE.message}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
 
         {/* API Keys */}
         <Card>

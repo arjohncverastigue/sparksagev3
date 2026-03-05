@@ -112,12 +112,12 @@ export default function FAQManagementPage() {
         title: "Success",
         description: "FAQ added successfully!",
       });
-    } catch (err) {
+    } catch (err: any) { // Explicitly type 'err' as 'any' for easier access to properties
       setError("Failed to add FAQ.");
       console.error("Failed to add FAQ:", err);
       toast({
         title: "Error",
-        description: "Failed to add FAQ.",
+        description: `Failed to add FAQ: ${err.message || "Unknown error"}`, // Use err.message here
         variant: "destructive",
       });
     } finally {

@@ -56,6 +56,11 @@ MODERATION_ENABLED = os.getenv("MODERATION_ENABLED", "False").lower() == "true"
 MOD_LOG_CHANNEL_ID = os.getenv("MOD_LOG_CHANNEL_ID", "")
 MODERATION_SENSITIVITY = os.getenv("MODERATION_SENSITIVITY", "medium")
 
+# Translation settings
+AUTO_TRANSLATE_ENABLED = os.getenv("AUTO_TRANSLATE_ENABLED", "False").lower() == "true"
+AUTO_TRANSLATE_CHANNELS = [int(cid) for cid in os.getenv("AUTO_TRANSLATE_CHANNELS", "").split(',') if cid.strip()]
+DEFAULT_TRANSLATION_LANGUAGE = os.getenv("DEFAULT_TRANSLATION_LANGUAGE", "English")
+
 # Rate limiting settings (requests per minute)
 RATE_LIMIT_USER = int(os.getenv("RATE_LIMIT_USER", "30"))  # 30 requests/min per user
 RATE_LIMIT_GUILD = int(os.getenv("RATE_LIMIT_GUILD", "100"))  # 100 requests/min per guild
@@ -154,6 +159,9 @@ def reload_from_db(db_config: dict[str, str]):
         "MODERATION_ENABLED": lambda v: v.lower() == "true",
         "MOD_LOG_CHANNEL_ID": str,
         "MODERATION_SENSITIVITY": str,
+        "AUTO_TRANSLATE_ENABLED": lambda v: v.lower() == "true",
+        "AUTO_TRANSLATE_CHANNELS": lambda v: [int(cid) for cid in v.split(',') if cid.strip()],
+        "DEFAULT_TRANSLATION_LANGUAGE": str,
         "RATE_LIMIT_USER": int,
         "RATE_LIMIT_GUILD": int,
         "RATE_LIMITING_ENABLED": lambda v: v.lower() == "true",
