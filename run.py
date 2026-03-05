@@ -61,7 +61,15 @@ def main():
     print("=" * 50)
 
     from bot import bot
-    bot.run(config.DISCORD_TOKEN)
+    print("  Attempting to start Discord bot...")
+    try:
+        bot.run(config.DISCORD_TOKEN)
+        print("  Discord bot started successfully (this line might not be reached if bot.run is blocking).")
+    except discord.LoginFailure as e:
+        print(f"  ERROR: Discord bot login failed! Check DISCORD_TOKEN. Details: {e}")
+    except Exception as e:
+        print(f"  ERROR: An unexpected error occurred while starting the Discord bot: {e}")
+
 
 
 if __name__ == "__main__":
