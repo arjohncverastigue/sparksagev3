@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
         allow_origins=[
             "http://localhost:3000",
             "http://127.0.0.1:3000",
+            "https://stellar-kindness-production-6c87.up.railway.app",
         ],
         # we don't use cookies for auth, so credentials can remain False;
         # this allows us to use wildcard headers without causing CORS errors.
