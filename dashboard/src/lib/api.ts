@@ -5,12 +5,16 @@ interface FetchOptions extends RequestInit {
 }
 
 async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
-  const { token, headers: customHeaders, ...rest } = options;
+  const { token, headers: customHeaders, body, ...rest } = options; // Destructure body here
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...((customHeaders as Record<string, string>) || {}),
   };
+
+  // Only set Content-Type: application/json if body is not FormData
+  if (!(body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -18,12 +22,18 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
 
   const res = await fetch(`${API_URL}${path}`, {
     headers,
+    body: (body instanceof FormData || typeof body === 'string') ? body : JSON.stringify(body), // Only stringify if it's an object
     ...rest,
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(body.detail || `API error: ${res.status}`);
+    const errBody = await res.json().catch(() => ({ detail: res.statusText }));
+    console.error("API Error Response:", errBody);
+    // Ensure detail is stringified if it's an object/array, otherwise use directly
+    const errorMessage = typeof errBody.detail === 'object' && errBody.detail !== null
+      ? JSON.stringify(errBody.detail)
+      : errBody.detail;
+    throw new Error(errorMessage || `API error: ${res.status}`);
   }
 
   // Handle 204 No Content responses
@@ -63,6 +73,16 @@ export interface ChannelInfo {
 
 export interface ChannelListResponse {
   channels: ChannelInfo[];
+}
+
+// New interface for Role info
+export interface RoleInfo {
+  id: string;
+  name: string;
+}
+
+export interface GuildRolesResponse {
+  roles: RoleInfo[];
 }
 
 export interface MessageItem {
@@ -274,6 +294,38 @@ export const api = {
       method: "POST",
       token,
     }),
+  
+  // New: Upload plugin files
+  uploadPluginFiles: (token: string, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append("plugin_files", file);
+    });
+    return apiFetch<{ message: string; filenames: string[] }>("/api/plugins/upload", {
+      method: "POST",
+      body: formData,
+      token,
+      headers: {
+        // When using FormData, fetch automatically sets 'Content-Type': 'multipart/form-data'
+        // and its boundary. Explicitly setting it here can cause issues.
+        // So, we'll omit Content-Type for FormData.
+      },
+    });
+  },
+
+  // New: Rescan plugins directory
+  rescanPlugins: (token: string) =>
+    apiFetch<{ message: string }>("/api/plugins/rescan", {
+      method: "POST",
+      token,
+    }),
+  
+  // New: Delete plugin
+  deletePlugin: (token: string, name: string) =>
+    apiFetch<{ message: string }>(`/api/plugins/${name}`, {
+      method: "DELETE",
+      token,
+    }),
 
   createFaq: (token: string, guildId: string, faq: FAQCreate) =>
     apiFetch<FAQResponse>(`/api/faqs?guild_id=${guildId}`, {
@@ -312,6 +364,10 @@ export const api = {
   // guild channel listing (used for display names)
   listGuildChannels: (token: string, guildId: string) =>
     apiFetch<ChannelListResponse>(`/api/bot/guilds/${guildId}/channels`, { token }),
+  
+  // New: List guild roles
+  listGuildRoles: (token: string, guildId: string) =>
+    apiFetch<GuildRolesResponse>(`/api/bot/guilds/${guildId}/roles`, { token }),
   
   createChannelPrompt: (token: string, prompt: ChannelPromptCreate) =>
     apiFetch<{ status: string }>("/api/config/channel_prompts", {
@@ -355,4 +411,3 @@ export interface ChannelProviderBase {
 export interface ChannelProviderCreate extends ChannelProviderBase {}
 
 export interface ChannelProviderResponse extends ChannelProviderBase {}
-

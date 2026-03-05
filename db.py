@@ -223,22 +223,14 @@ async def get_plugin(name: str) -> dict | None:
     row = await cursor.fetchone()
     return dict(row) if row else None
 
-async def set_plugin_enabled(name: str, enabled: bool):
+async def set_plugin_enabled(name: str, enabled: bool) -> bool:
     db = await get_db()
-    # We can't rely on a row already existing because new plugins may be
-    # enabled before the metadata was persisted.  The table enforces
-    # NOT NULL on cog_path/manifest_path, so provide empty strings so the
-    # INSERT succeeds and then update the enabled flag.
-    await db.execute(
-        "INSERT OR IGNORE INTO plugins (name, version, author, description, cog_path, manifest_path, enabled) \
-         VALUES (?, '', '', '', '', '', ?)",
-        (name, 1 if enabled else 0),
-    )
-    await db.execute(
+    cursor = await db.execute(
         "UPDATE plugins SET enabled = ? WHERE name = ?",
         (1 if enabled else 0, name),
     )
     await db.commit()
+    return cursor.rowcount == 1
 
 async def upsert_plugin(manifest: dict, cog_path: str, manifest_path: str):
     """Insert or update plugin metadata derived from a manifest."""
@@ -262,6 +254,30 @@ async def upsert_plugin(manifest: dict, cog_path: str, manifest_path: str):
         ),
     )
     await db.commit()
+
+async def delete_plugin_by_name(name: str) -> tuple[str | None, str | None]:
+    """
+    Deletes a plugin's entry from the database and returns its cog_path and manifest_path.
+    Returns (None, None) if the plugin is not found.
+    """
+    db = await get_db()
+    
+    # First, get the paths before deleting the entry
+    cursor = await db.execute(
+        "SELECT cog_path, manifest_path FROM plugins WHERE name = ?",
+        (name,)
+    )
+    row = await cursor.fetchone()
+    
+    if row:
+        cog_path = row["cog_path"]
+        manifest_path = row["manifest_path"]
+        
+        await db.execute("DELETE FROM plugins WHERE name = ?", (name,))
+        await db.commit()
+        return cog_path, manifest_path
+    else:
+        return None, None
 
 
 async def sync_env_to_db():

@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { PlusCircle, Loader2, Trash } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { api, CommandPermissionResponse } from "@/lib/api"; // Assuming CommandPermissionResponse is defined in api.ts
+import { api, CommandPermissionResponse, RoleInfo } from "@/lib/api"; // Import RoleInfo
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,17 +49,18 @@ export default function PermissionsManagementPage() {
 
   const [permissions, setPermissions] = useState<CommandPermissionResponse[]>([]);
   const [availableCommands, setAvailableCommands] = useState<string[]>([]); // To be fetched from bot API
-  const [availableRoles, setAvailableRoles] = useState<any[]>([]); // To be fetched from bot API (id, name)
+  const [availableRoles, setAvailableRoles] = useState<RoleInfo[]>([]); // Use RoleInfo for real roles
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedCommand, setSelectedCommand] = useState("");
-  const [selectedRole, setSelectedRole] = useState("");
+  const [selectedRole, setSelectedRole] = useState(""); // This should store the role ID
+
   const [submitting, setSubmitting] = useState(false);
 
   // TODO: Implement proper guild selection. For now, hardcode or assume a default.
   // This needs to be dynamic based on the connected bot's guilds.
-  const GUILD_ID = "1474372961166299290"; // Use the actual guild ID
+  const GUILD_ID = "1474372961166299290"; // Use the actual guild ID from your Discord server
 
   const token = (session as { accessToken?: string })?.accessToken;
 
@@ -73,34 +74,24 @@ export default function PermissionsManagementPage() {
     const fetchPermissionsData = async () => {
       try {
         setLoading(true);
-        const perms = await api.listCommandPermissions(token, GUILD_ID); // Needs to be implemented in api.ts
+        
+        // Fetch permissions
+        const perms = await api.listCommandPermissions(token, GUILD_ID);
         setPermissions(perms);
 
-        // TODO: Fetch available commands and roles from a bot API endpoint
-        // For now, mock data:
+        // Fetch available commands (still mocked for now, but should be dynamic)
         setAvailableCommands(["ask", "clear", "provider", "summarize", "review", "faq add", "faq list", "faq remove"]);
-        // Assume bot status API can give roles
-        // const botStatus = await api.getBotStatus(token);
-        // if (botStatus && botStatus.guilds) {
-        //   const currentGuild = botStatus.guilds.find(g => g.id === GUILD_ID);
-        //   if (currentGuild) {
-        //     setAvailableRoles(currentGuild.roles); // Assuming roles are part of guild object
-        //   }
-        // }
-        // Mock roles for now:
-        setAvailableRoles([
-            { id: "12345", name: "Admin" },
-            { id: "67890", name: "Member" },
-            { id: "54321", name: "Moderator" },
-        ]);
+        
+        // Fetch available roles dynamically
+        const rolesResponse = await api.listGuildRoles(token, GUILD_ID);
+        setAvailableRoles(rolesResponse.roles);
 
-
-      } catch (err) {
+      } catch (err: any) {
         setError("Failed to fetch permissions data.");
         console.error("Failed to fetch permissions data:", err);
         toast({
           title: "Error",
-          description: "Failed to fetch permissions data.",
+          description: `Failed to fetch permissions data: ${err.message || "Unknown error"}`,
           variant: "destructive",
         });
       } finally {
@@ -110,6 +101,12 @@ export default function PermissionsManagementPage() {
 
     fetchPermissionsData();
   }, [token, GUILD_ID, toast]);
+
+
+  // Helper to get role name from ID
+  const getRoleName = (roleId: string) => {
+    return availableRoles.find(r => r.id === roleId)?.name || `Unknown Role (ID: ${roleId})`;
+  };
 
 
   const handleAddPermission = async () => {
@@ -124,10 +121,11 @@ export default function PermissionsManagementPage() {
 
     setSubmitting(true);
     try {
-      const createdPerm = await api.createCommandPermission(token, { // Needs to be implemented in api.ts
+      // Ensure the selectedRole is indeed the role ID
+      const createdPerm = await api.createCommandPermission(token, {
         command_name: selectedCommand,
         guild_id: GUILD_ID,
-        role_id: selectedRole,
+        role_id: selectedRole, // This is already the role ID from the Select component
       });
       setPermissions((prev) => [...prev, createdPerm]);
       setSelectedCommand("");
@@ -136,12 +134,12 @@ export default function PermissionsManagementPage() {
         title: "Success",
         description: "Permission added successfully!",
       });
-    } catch (err) {
+    } catch (err: any) {
       setError("Failed to add permission.");
       console.error("Failed to add permission:", err);
       toast({
         title: "Error",
-        description: "Failed to add permission.",
+        description: `Failed to add permission: ${err.message || "Unknown error"}`,
         variant: "destructive",
       });
     } finally {
@@ -159,23 +157,26 @@ export default function PermissionsManagementPage() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to remove the restriction for command '${permission.command_name}' for role '${availableRoles.find(r => r.id === permission.role_id)?.name || permission.role_id}'?`)) {
+    // Get the role name for the confirmation dialog
+    const roleNameForConfirm = getRoleName(permission.role_id);
+
+    if (!confirm(`Are you sure you want to remove the restriction for command '${permission.command_name}' for role '${roleNameForConfirm}'?`)) {
       return;
     }
 
     try {
-      await api.deleteCommandPermission(token, permission.command_name, GUILD_ID, permission.role_id); // Needs to be implemented in api.ts
+      await api.deleteCommandPermission(token, permission.command_name, GUILD_ID, permission.role_id);
       setPermissions((prev) => prev.filter((p) => p.command_name !== permission.command_name || p.role_id !== permission.role_id));
       toast({
         title: "Success",
         description: "Permission removed successfully!",
       });
-    } catch (err) {
+    } catch (err: any) {
       setError("Failed to delete permission.");
       console.error("Failed to delete permission:", err);
       toast({
         title: "Error",
-        description: "Failed to delete permission.",
+        description: `Failed to delete permission: ${err.message || "Unknown error"}`,
         variant: "destructive",
       });
     }
@@ -286,7 +287,7 @@ export default function PermissionsManagementPage() {
                 <TableRow key={`${perm.command_name}-${perm.role_id}`}>
                   <TableCell className="font-medium">/{perm.command_name}</TableCell>
                   <TableCell>
-                    {availableRoles.find(r => r.id === perm.role_id)?.name || `ID: ${perm.role_id}`}
+                    {getRoleName(perm.role_id)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

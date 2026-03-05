@@ -1,7 +1,0 @@
-{
-  "name": "example",
-  "version": "1.0.0",
-  "author": "community",
-  "description": "Example plugin with a /hello command",
-  "cog": "example.py"
-}
