@@ -11,7 +11,7 @@ def start_api_server():
     from api.main import create_app
 
     app = create_app()
-    port = int(os.getenv("DASHBOARD_PORT", "8000"))
+    port = int(os.getenv("PORT", os.getenv("DASHBOARD_PORT", "8000")))
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 
@@ -38,7 +38,7 @@ def main():
     # Start FastAPI in background thread
     api_thread = threading.Thread(target=start_api_server, daemon=True)
     api_thread.start()
-    port = int(os.getenv("DASHBOARD_PORT", "8000"))
+    port = int(os.getenv("PORT", os.getenv("DASHBOARD_PORT", "8000")))
     print(f"  API server starting on http://localhost:{port}")
 
     # Start Discord bot in main thread
