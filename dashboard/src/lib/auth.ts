@@ -14,6 +14,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         try {
           const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          console.log("Frontend API URL being used:", apiUrl);
           const res = await fetch(`${apiUrl}/api/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
