@@ -100,13 +100,15 @@ async def upload_plugin(
         try:
             # Move manifest.json
             final_manifest_path = os.path.join(PLUGINS_DIR, os.path.basename(manifest_path))
-            shutil.move(manifest_path, final_manifest_path)
+            shutil.copy2(manifest_path, final_manifest_path) # Use copy2 instead of move
+            os.remove(manifest_path) # Remove original
             uploaded_filenames.append(os.path.basename(final_manifest_path))
             logger.info(f"Moved manifest.json to {final_manifest_path}")
 
             # Move .py file
             final_py_path = os.path.join(PLUGINS_DIR, os.path.basename(plugin_py_path))
-            shutil.move(plugin_py_path, final_py_path)
+            shutil.copy2(plugin_py_path, final_py_path) # Use copy2 instead of move
+            os.remove(plugin_py_path) # Remove original
             uploaded_filenames.append(os.path.basename(final_py_path))
             logger.info(f"Moved plugin .py file to {final_py_path}")
         except Exception as e:

@@ -1,5 +1,4 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-console.log("Frontend API_URL:", API_URL); // Temporarily add this line
 
 interface FetchOptions extends RequestInit {
   token?: string;
