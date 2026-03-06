@@ -295,12 +295,10 @@ export const api = {
       token,
     }),
   
-  // New: Upload plugin files
-  uploadPluginFiles: (token: string, files: File[]) => {
+  // New: Upload plugin zip file
+  uploadPluginZip: (token: string, file: File) => {
     const formData = new FormData();
-    files.forEach((file) => {
-      formData.append("plugin_files", file);
-    });
+    formData.append("plugin_zip_file", file); // Changed field name and single file
     return apiFetch<{ message: string; filenames: string[] }>("/api/plugins/upload", {
       method: "POST",
       body: formData,

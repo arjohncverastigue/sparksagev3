@@ -22,7 +22,7 @@ export default function PluginManagementPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [rescanning, setRescanning] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); // Changed from selectedFiles
   const [deletingPlugin, setDeletingPlugin] = useState<string | null>(null); // State to track which plugin is being deleted
   const { toast } = useToast();
 
@@ -79,14 +79,14 @@ export default function PluginManagementPage() {
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setSelectedFiles(event.target.files);
+    setSelectedFile(event.target.files ? event.target.files[0] : null); // Changed to single file
   };
 
   const handleUpload = async () => {
-    if (!token || !selectedFiles || selectedFiles.length === 0) {
+    if (!token || !selectedFile) { // Changed from selectedFiles
       toast({
         title: "Warning",
-        description: "Please select at least one file to upload.",
+        description: "Please select a ZIP file to upload.", // Updated message
         variant: "destructive",
       });
       return;
@@ -94,13 +94,12 @@ export default function PluginManagementPage() {
 
     setUploading(true);
     try {
-      const filesArray = Array.from(selectedFiles);
-      const response = await api.uploadPluginFiles(token, filesArray);
+      const response = await api.uploadPluginZip(token, selectedFile); // Changed API call and argument
       toast({
         title: "Success",
         description: response.message,
       });
-      setSelectedFiles(null);
+      setSelectedFile(null); // Changed from setSelectedFiles
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       await fetchPlugins();
@@ -108,7 +107,7 @@ export default function PluginManagementPage() {
       console.error(err);
       toast({
         title: "Error",
-        description: `Failed to upload plugin files: ${err.message || "Unknown error"}`,
+        description: `Failed to upload plugin: ${err.message || "Unknown error"}`, // Updated message
         variant: "destructive",
       });
     } finally {
@@ -178,12 +177,11 @@ export default function PluginManagementPage() {
       <h1 className="text-3xl font-bold">Plugin Management</h1>
 
       <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 p-4 border rounded-md bg-card text-card-foreground shadow-sm">
-        <label htmlFor="plugin-upload" className="sr-only">Upload Plugin Files</label>
+        <label htmlFor="plugin-upload" className="sr-only">Upload Plugin ZIP</label>
         <input
           id="plugin-upload"
           type="file"
-          multiple
-          accept=".json,.py"
+          accept=".zip" // Changed accept to .zip
           onChange={handleFileChange}
           className="block w-full text-sm text-gray-500
             file:mr-4 file:py-2 file:px-4
@@ -192,13 +190,13 @@ export default function PluginManagementPage() {
             file:bg-violet-50 file:text-violet-700
             hover:file:bg-violet-100"
         />
-        <Button onClick={handleUpload} disabled={uploading || !selectedFiles || selectedFiles.length === 0}>
+        <Button onClick={handleUpload} disabled={uploading || !selectedFile}> {/* Changed selectedFiles */}
           {uploading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Upload className="mr-2 h-4 w-4" />
           )}
-          Upload Plugin(s)
+          Upload Plugin
         </Button>
         <Button onClick={handleRescan} disabled={rescanning}>
           {rescanning ? (
@@ -210,9 +208,9 @@ export default function PluginManagementPage() {
         </Button>
       </div>
 
-      {selectedFiles && selectedFiles.length > 0 && (
+      {selectedFile && ( // Changed selectedFiles
         <div className="text-sm text-gray-600">
-          Selected files: {Array.from(selectedFiles).map(f => f.name).join(", ")}
+          Selected file: {selectedFile.name} {/* Changed to single file name */}
         </div>
       )}
 
