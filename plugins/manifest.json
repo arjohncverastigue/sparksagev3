@@ -1,7 +1,0 @@
-{
-  "name": "trivia",
-  "version": "1.0.0",
-  "author": "community",
-  "description": "Trivia game commands",
-  "cog": "trivia.py"
-}

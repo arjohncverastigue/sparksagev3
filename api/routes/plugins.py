@@ -1,5 +1,7 @@
 import os
 import shutil
+import zipfile  # New import
+import tempfile # New import
 from typing import List
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
@@ -24,49 +26,101 @@ async def get_all_plugins(
 
 @router.post("/upload")
 async def upload_plugin(
-    plugin_files: List[UploadFile],
+    plugin_zip_file: UploadFile = File(...), # Changed to single UploadFile
     user: dict = Depends(get_current_user)
 ):
     """
-    Uploads plugin files (manifest.json and cog.py) to the plugins directory.
+    Uploads a plugin as a ZIP archive, extracts its contents, and moves
+    the manifest.json and .py file to the plugins directory.
     """
-    if not plugin_files:
+    if not plugin_zip_file.filename.endswith(".zip"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No files provided for upload."
+            detail="Only .zip files are allowed for plugin uploads."
         )
 
-    uploaded_filenames = []
-    for uploaded_file in plugin_files:
-        file_extension = os.path.splitext(uploaded_file.filename)[1].lower()
-        if file_extension not in (".json", ".py"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Only .json and .py files are allowed. Received: {uploaded_file.filename}"
-            )
-
-        file_path = os.path.join(PLUGINS_DIR, uploaded_file.filename)
+    # Create a temporary directory to extract the zip contents
+    with tempfile.TemporaryDirectory() as temp_dir:
+        zip_file_path = os.path.join(temp_dir, plugin_zip_file.filename)
         
+        # Save the uploaded zip file to the temporary directory
         try:
-            # Ensure the plugins directory exists
-            os.makedirs(PLUGINS_DIR, exist_ok=True)
-            
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(uploaded_file.file, buffer)
-            uploaded_filenames.append(uploaded_file.filename)
-            logger.info(f"Uploaded plugin file: {uploaded_file.filename}")
+            with open(zip_file_path, "wb") as buffer:
+                shutil.copyfileobj(plugin_zip_file.file, buffer)
+            logger.info(f"Saved uploaded zip file to {zip_file_path}")
         except Exception as e:
-            logger.error(f"Failed to upload {uploaded_file.filename}: {e}")
+            logger.error(f"Failed to save uploaded zip file: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload {uploaded_file.filename}: {e}"
+                detail=f"Failed to save uploaded zip file: {e}"
+            )
+
+        # Extract the zip file
+        try:
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            logger.info(f"Extracted zip file contents to {temp_dir}")
+        except zipfile.BadZipFile:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid ZIP file provided."
+            )
+        except Exception as e:
+            logger.error(f"Failed to extract zip file: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to extract zip file: {e}"
+            )
+
+        # Scan for manifest.json and .py files in the extracted directory
+        manifest_path = None
+        plugin_py_path = None
+        for root, _, files in os.walk(temp_dir):
+            for file in files:
+                if file == "manifest.json":
+                    manifest_path = os.path.join(root, file)
+                elif file.endswith(".py"):
+                    plugin_py_path = os.path.join(root, file)
+
+        if not manifest_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plugin ZIP archive must contain a 'manifest.json' file."
+            )
+        if not plugin_py_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plugin ZIP archive must contain a '.py' plugin file."
+            )
+
+        # Ensure the plugins directory exists
+        os.makedirs(PLUGINS_DIR, exist_ok=True)
+
+        uploaded_filenames = []
+        try:
+            # Move manifest.json
+            final_manifest_path = os.path.join(PLUGINS_DIR, os.path.basename(manifest_path))
+            shutil.move(manifest_path, final_manifest_path)
+            uploaded_filenames.append(os.path.basename(final_manifest_path))
+            logger.info(f"Moved manifest.json to {final_manifest_path}")
+
+            # Move .py file
+            final_py_path = os.path.join(PLUGINS_DIR, os.path.basename(plugin_py_path))
+            shutil.move(plugin_py_path, final_py_path)
+            uploaded_filenames.append(os.path.basename(final_py_path))
+            logger.info(f"Moved plugin .py file to {final_py_path}")
+        except Exception as e:
+            logger.error(f"Failed to move extracted plugin files: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to move extracted plugin files: {e}"
             )
     
     # After uploading files, trigger a scan to discover them and persist metadata
     await scan_and_persist_plugin_metadata()
 
     return {
-        "message": f"Successfully uploaded files: {', '.join(uploaded_filenames)} and initiated plugin scan.",
+        "message": f"Successfully uploaded plugin from {plugin_zip_file.filename} and initiated plugin scan.",
         "filenames": uploaded_filenames
     }
 
