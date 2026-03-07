@@ -1,5 +1,16 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-console.log("Frontend API_URL:", API_URL); // Re-add this line for debugging
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "https://sparksagev3-production.up.railway.app";
+
+// Force HTTPS when the page is served over HTTPS (prevents mixed content)
+const API_URL = (() => {
+  let url = RAW_API_URL.trim().replace(/\/+$/, "");
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    url = url.replace(/^http:\/\//i, "https://");
+  }
+  return url;
+})();
+
+console.log("[API Client] RAW env:", process.env.NEXT_PUBLIC_API_URL);
+console.log("[API Client] Final API_URL:", API_URL);
 
 interface FetchOptions extends RequestInit {
   token?: string;
