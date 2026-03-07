@@ -1,9 +1,20 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import auth, config, providers, bot, conversations, wizard, faqs, permissions, analytics, quota, plugins
+from api.routes import (
+    auth,
+    config,
+    providers,
+    bot,
+    conversations,
+    wizard,
+    faqs,
+    permissions,
+    analytics,
+    quota,
+    plugins,
+)
 import db
-
 
 
 @asynccontextmanager
@@ -15,7 +26,12 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="SparkSage API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(
+        title="SparkSage API",
+        version="1.0.0",
+        lifespan=lifespan,
+        redirect_slashes=False,
+    )
 
     app.add_middleware(
         CORSMiddleware,
@@ -24,11 +40,8 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:3000",
             "https://stellar-kindness-production-6c87.up.railway.app",
         ],
-        # we don't use cookies for auth, so credentials can remain False;
-        # this allows us to use wildcard headers without causing CORS errors.
         allow_credentials=False,
         allow_methods=["*"],
-        # explicitly allow Authorization so POST/PUT requests succeed
         allow_headers=["Authorization", "Content-Type"],
     )
 
@@ -49,5 +62,6 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     return app
+
 
 app = create_app()

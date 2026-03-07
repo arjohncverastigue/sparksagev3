@@ -14,13 +14,11 @@ from plugins import PLUGINS_DIR, scan_and_persist_plugin_metadata
 
 router = APIRouter()
 
+@router.get("")
 @router.get("/")
 async def get_all_plugins(
     user: dict = Depends(get_current_user)
 ):
-    """
-    Returns a list of all discovered plugins with their status.
-    """
     plugins_data = await db.list_plugins()
     return {"plugins": plugins_data}
 
