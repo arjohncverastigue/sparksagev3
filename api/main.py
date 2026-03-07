@@ -16,7 +16,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="SparkSage API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(redirect_slashes=False)
 
+    return app
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
