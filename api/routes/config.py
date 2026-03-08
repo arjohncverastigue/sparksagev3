@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from api.deps import get_current_user
 import db
+import bot # Added import
 
 router = APIRouter()
 
@@ -53,6 +54,10 @@ async def _reload_config():
 
     all_config = await db.get_all_config()
     cfg.reload_from_db(all_config)
+
+    # If the bot is running, notify it to update its rate limiter with the new config
+    if hasattr(bot, "bot") and bot.bot.is_ready():
+        await bot.bot.update_rate_limiter_config()
 
     import providers
     providers.reload_clients()
