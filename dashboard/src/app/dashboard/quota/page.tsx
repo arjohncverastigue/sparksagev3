@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { api } from "@/lib/api";
+import { api, GuildItem } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,17 +19,36 @@ type QuotaData = {
 export default function QuotaPage() {
   const { data: session } = useSession();
   const [quotaData, setQuotaData] = useState<QuotaData | null>(null);
+  const [guildNamesMap, setGuildNamesMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const token = (session as { accessToken?: string })?.accessToken;
 
   useEffect(() => {
     if (!token) return;
-    setLoading(true);
-    api
-      .getQuotaStatus(token)
-      .then((data) => setQuotaData(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [quotaResponse, botStatusResponse] = await Promise.all([
+          api.getQuotaStatus(token),
+          api.getBotStatus(token),
+        ]);
+
+        setQuotaData(quotaResponse);
+
+        const newGuildNamesMap = new Map<string, string>();
+        botStatusResponse.guilds.forEach((guild: GuildItem) => {
+          newGuildNamesMap.set(guild.id, guild.name);
+        });
+        setGuildNamesMap(newGuildNamesMap);
+      } catch (error) {
+        console.error("Failed to fetch quota or bot status:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [token]);
 
   if (loading) {
@@ -199,7 +218,7 @@ export default function QuotaPage() {
                   <div key={guildId} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium truncate">
-                        {guildId}
+                        {guildNamesMap.get(guildId) || guildId}
                       </span>
                       <span
                         className={`text-xs font-semibold ${
