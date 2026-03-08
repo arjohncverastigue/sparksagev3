@@ -59,7 +59,7 @@ async def _reload_config():
 
     # If the bot is running, notify it to update its rate limiter with the new config
     if hasattr(bot, "bot") and bot.bot.is_ready():
-        await bot.bot.update_rate_limiter_config()
+        await bot.bot.update_rate_limiter_config(all_config)
 
     import providers
     providers.reload_clients()
