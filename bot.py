@@ -107,9 +107,10 @@ class SparkSageBot(commands.Bot):
 
     async def update_rate_limiter_config(self):
         """Reload config and update rate limiter capacities if enabled."""
-        importlib.reload(config)
-        print(f"DEBUG: bot.update_rate_limiter_config - config.RATE_LIMIT_USER after reload: {config.RATE_LIMIT_USER}")
-        print(f"DEBUG: bot.update_rate_limiter_config - config.RATE_LIMIT_GUILD after reload: {config.RATE_LIMIT_GUILD}")
+        # config module has already been reloaded in _reload_config in api/routes/config.py
+        # We now just read the updated values directly.
+        print(f"DEBUG: bot.update_rate_limiter_config - config.RATE_LIMIT_USER (current): {config.RATE_LIMIT_USER}")
+        print(f"DEBUG: bot.update_rate_limiter_config - config.RATE_LIMIT_GUILD (current): {config.RATE_LIMIT_GUILD}")
 
         if config.RATE_LIMITING_ENABLED and hasattr(self, "rate_limiter"):
             self.rate_limiter.update_capacities(
