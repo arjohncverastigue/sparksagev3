@@ -99,8 +99,8 @@ async def enable_plugin(bot: commands.Bot, name: str) -> bool:
     module_name = f"plugins.{os.path.splitext(cog_file)[0]}"
     try:
         await bot.load_extension(module_name)
-        # Sync slash commands with Discord after loading a new extension
-        await bot.tree.sync()
+        # Schedule sync slash commands with Discord after loading a new extension
+        bot.loop.create_task(bot.tree.sync())
     except commands.ExtensionAlreadyLoaded:
         # already loaded is fine
         pass
@@ -123,8 +123,8 @@ async def disable_plugin(bot: commands.Bot, name: str) -> bool:
     module_name = f"plugins.{os.path.splitext(cog_file)[0]}"
     try:
         await bot.unload_extension(module_name)
-        # Sync slash commands with Discord after unloading an extension
-        await bot.tree.sync()
+        # Schedule sync slash commands with Discord after unloading an extension
+        bot.loop.create_task(bot.tree.sync())
     except commands.ExtensionNotLoaded:
         # nothing to unload
         pass
