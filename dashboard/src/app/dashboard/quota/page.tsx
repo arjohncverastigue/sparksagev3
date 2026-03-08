@@ -21,7 +21,96 @@ export default function QuotaPage() {
   const [quotaData, setQuotaData] = useState<QuotaData | null>(null);
   const [guildNamesMap, setGuildNamesMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [isUserLimitEditing, setIsUserLimitEditing] = useState(false);
+  const [userLimitInput, setUserLimitInput] = useState("");
+  const [isGuildLimitEditing, setIsGuildLimitEditing] = useState(false);
+  const [guildLimitInput, setGuildLimitInput] = useState("");
+  const { toast } = useToast();
   const token = (session as { accessToken?: string })?.accessToken;
+
+  const handleEditUserLimit = () => {
+    setIsUserLimitEditing(true);
+    setUserLimitInput(String(quotaData?.rate_limit_user || ""));
+  };
+
+  const handleSaveUserLimit = async () => {
+    if (!token || !quotaData) return;
+    const newValue = Number(userLimitInput);
+    if (isNaN(newValue) || newValue <= 0) {
+      toast({
+        title: "Invalid input",
+        description: "Please enter a valid positive number for the user limit.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await api.updateConfig(token, { RATE_LIMIT_USER: String(newValue) });
+      setQuotaData((prev) => ({
+        ...(prev as QuotaData),
+        rate_limit_user: newValue,
+      }));
+      toast({
+        title: "User limit updated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to update user limit",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUserLimitEditing(false);
+    }
+  };
+
+  const handleCancelUserLimit = () => {
+    setIsUserLimitEditing(false);
+    setUserLimitInput("");
+  };
+
+  const handleEditGuildLimit = () => {
+    setIsGuildLimitEditing(true);
+    setGuildLimitInput(String(quotaData?.rate_limit_guild || ""));
+  };
+
+  const handleSaveGuildLimit = async () => {
+    if (!token || !quotaData) return;
+    const newValue = Number(guildLimitInput);
+    if (isNaN(newValue) || newValue <= 0) {
+      toast({
+        title: "Invalid input",
+        description: "Please enter a valid positive number for the guild limit.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await api.updateConfig(token, { RATE_LIMIT_GUILD: String(newValue) });
+      setQuotaData((prev) => ({
+        ...(prev as QuotaData),
+        rate_limit_guild: newValue,
+      }));
+      toast({
+        title: "Guild limit updated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to update guild limit",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGuildLimitEditing(false);
+    }
+  };
+
+  const handleCancelGuildLimit = () => {
+    setIsGuildLimitEditing(false);
+    setGuildLimitInput("");
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -120,9 +209,25 @@ export default function QuotaPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {quotaData.rate_limit_user}
-            </div>
+            {isUserLimitEditing ? (
+              <div className="flex items-center space-x-2">
+                <Input
+                  type="number"
+                  value={userLimitInput}
+                  onChange={(e) => setUserLimitInput(e.target.value)}
+                  className="w-24"
+                />
+                <Button size="sm" onClick={handleSaveUserLimit}>Save</Button>
+                <Button variant="outline" size="sm" onClick={handleCancelUserLimit}>Cancel</Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold">
+                  {quotaData.rate_limit_user}
+                </div>
+                <Button variant="outline" size="sm" onClick={handleEditUserLimit}>Edit</Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               requests per minute
             </p>
@@ -136,9 +241,25 @@ export default function QuotaPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {quotaData.rate_limit_guild}
-            </div>
+            {isGuildLimitEditing ? (
+              <div className="flex items-center space-x-2">
+                <Input
+                  type="number"
+                  value={guildLimitInput}
+                  onChange={(e) => setGuildLimitInput(e.target.value)}
+                  className="w-24"
+                />
+                <Button size="sm" onClick={handleSaveGuildLimit}>Save</Button>
+                <Button variant="outline" size="sm" onClick={handleCancelGuildLimit}>Cancel</Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold">
+                  {quotaData.rate_limit_guild}
+                </div>
+                <Button variant="outline" size="sm" onClick={handleEditGuildLimit}>Edit</Button>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               requests per minute
             </p>
