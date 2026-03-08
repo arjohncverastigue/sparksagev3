@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
+import { useToast } from "@/components/ui/use-toast";
 import { Switch } from "@/components/ui/switch"; // Import Switch
 import {
   Select,
@@ -83,6 +83,7 @@ export default function SettingsPage() {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   const token = (session as { accessToken?: string })?.accessToken;
 
@@ -144,9 +145,14 @@ export default function SettingsPage() {
                 }
       
       await api.updateConfig(token, payload);
-      toast.success("Settings saved successfully");
+      toast({
+        title: "Settings saved successfully",
+      });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save settings");
+      toast({
+        title: err instanceof Error ? err.message : "Failed to save settings",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
