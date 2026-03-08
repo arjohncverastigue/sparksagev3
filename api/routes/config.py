@@ -54,6 +54,8 @@ async def _reload_config():
 
     all_config = await db.get_all_config()
     cfg.reload_from_db(all_config)
+    print(f"DEBUG: _reload_config - config.RATE_LIMIT_USER after reload: {cfg.RATE_LIMIT_USER}")
+    print(f"DEBUG: _reload_config - config.RATE_LIMIT_GUILD after reload: {cfg.RATE_LIMIT_GUILD}")
 
     # If the bot is running, notify it to update its rate limiter with the new config
     if hasattr(bot, "bot") and bot.bot.is_ready():
