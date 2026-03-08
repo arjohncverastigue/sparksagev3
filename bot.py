@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 import time
 import asyncio
+import importlib # Added import
 
 import config
 import providers
@@ -103,6 +104,16 @@ class SparkSageBot(commands.Bot):
 
         except RuntimeError as e:
             return f"Sorry, all AI providers failed:\n{e}", "none"
+
+    async def update_rate_limiter_config(self):
+        """Reload config and update rate limiter capacities if enabled."""
+        importlib.reload(config)
+        if config.RATE_LIMITING_ENABLED and hasattr(self, "rate_limiter"):
+            self.rate_limiter.update_capacities(
+                user_rate=config.RATE_LIMIT_USER,
+                guild_rate=config.RATE_LIMIT_GUILD,
+            )
+            print("Rate limiter capacities updated from config.")
 
     async def setup_hook(self):
         # Load cogs here
