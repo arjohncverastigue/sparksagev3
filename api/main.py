@@ -38,7 +38,7 @@ def create_app() -> FastAPI:
         allow_origins=[
             "http://localhost:3000",
             "http://127.0.0.1:3000",
-            "https://stellar-kindness-production-6c87.up.railway.app",
+            "https://sparksage.up.railway.app",
         ],
         allow_credentials=False,
         allow_methods=["*"],
