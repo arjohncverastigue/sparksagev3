@@ -303,14 +303,14 @@ export default function QuotaPage() {
                               : "text-green-500"
                         }`}
                       >
-                        {quota.tokens_remaining}/{quotaData.rate_limit_user}
+                        {Math.round(quota.tokens_remaining)}/{Math.round(quotaData.rate_limit_user)}
                       </span>
                     </div>
                     <Progress value={progress} className="h-2" />
                     <div className="text-xs text-muted-foreground">
                       {isLimited
                         ? `Reset in ${formatTime(quota.reset_at)}`
-                        : `${Math.max(0, quota.tokens_remaining)} requests remaining`}
+                        : `${Math.round(Math.max(0, quota.tokens_remaining))} requests remaining`}
                     </div>
                   </div>
                 );
@@ -353,14 +353,14 @@ export default function QuotaPage() {
                               : "text-green-500"
                         }`}
                       >
-                        {quota.tokens_remaining}/{quotaData.rate_limit_guild}
+                        {Math.round(quota.tokens_remaining)}/{Math.round(quotaData.rate_limit_guild)}
                       </span>
                     </div>
                     <Progress value={progress} className="h-2" />
                     <div className="text-xs text-muted-foreground">
                       {isLimited
                         ? `Reset in ${formatTime(quota.reset_at)}`
-                        : `${Math.max(0, quota.tokens_remaining)} requests remaining`}
+                        : `${Math.round(Math.max(0, quota.tokens_remaining))} requests remaining`}
                     </div>
                   </div>
                 );
