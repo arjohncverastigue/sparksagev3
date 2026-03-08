@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
-import type { ChannelItem } from "@/lib/api";
+import { api, ChannelItem, GuildItem } from "@/lib/api";
 import { ChannelList } from "@/components/conversations/channel-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -12,6 +11,7 @@ import { toast } from "sonner";
 export default function ConversationsPage() {
   const { data: session } = useSession();
   const [channels, setChannels] = useState<ChannelItem[]>([]);
+  const [channelNamesMap, setChannelNamesMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const token = (session as { accessToken?: string })?.accessToken;
@@ -19,9 +19,22 @@ export default function ConversationsPage() {
   async function load() {
     if (!token) return;
     try {
-      const result = await api.getConversations(token);
-      setChannels(result.channels);
-    } catch {
+      const [conversationsResult, botStatusResult] = await Promise.all([
+        api.getConversations(token),
+        api.getBotStatus(token),
+      ]);
+      setChannels(conversationsResult.channels);
+
+      const newChannelNamesMap = new Map<string, string>();
+      botStatusResult.guilds.forEach((guild: GuildItem) => {
+        guild.channels.forEach((channel) => {
+          newChannelNamesMap.set(channel.id, `#${channel.name}`);
+        });
+      });
+      setChannelNamesMap(newChannelNamesMap);
+
+    } catch (error) {
+      console.error("Failed to load conversations or bot status:", error);
       toast.error("Failed to load conversations");
     } finally {
       setLoading(false);
@@ -36,7 +49,8 @@ export default function ConversationsPage() {
     if (!token) return;
     try {
       await api.deleteConversation(token, channelId);
-      toast.success(`Cleared conversation for #${channelId}`);
+      const channelName = channelNamesMap.get(channelId) || `#${channelId}`;
+      toast.success(`Cleared conversation for ${channelName}`);
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
@@ -59,7 +73,7 @@ export default function ConversationsPage() {
           <CardTitle className="text-base">Channels</CardTitle>
         </CardHeader>
         <CardContent>
-          <ChannelList channels={channels} onDelete={handleDelete} />
+          <ChannelList channels={channels} onDelete={handleDelete} channelNamesMap={channelNamesMap} />
         </CardContent>
       </Card>
     </div>
