@@ -26,11 +26,18 @@ export default function ConversationsPage() {
       setChannels(conversationsResult.channels);
 
       const newChannelNamesMap = new Map<string, string>();
-      botStatusResult.guilds.forEach((guild: GuildItem) => {
-        guild.channels.forEach((channel) => {
-          newChannelNamesMap.set(channel.id, `#${channel.name}`);
-        });
+      const guildChannelPromises = botStatusResult.guilds.map(async (guild: GuildItem) => {
+        try {
+          const channelListResponse = await api.listGuildChannels(token, guild.id);
+          channelListResponse.channels.forEach((channel) => {
+            newChannelNamesMap.set(channel.id, `#${channel.name}`);
+          });
+        } catch (channelError) {
+          console.error(`Failed to fetch channels for guild ${guild.name} (${guild.id}):`, channelError);
+          // Continue processing other guilds even if one fails
+        }
       });
+      await Promise.all(guildChannelPromises);
       setChannelNamesMap(newChannelNamesMap);
 
     } catch (error) {
