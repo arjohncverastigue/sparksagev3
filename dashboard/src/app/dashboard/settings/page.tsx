@@ -119,7 +119,12 @@ export default function SettingsPage() {
         }
         form.reset({ ...DEFAULTS, ...mapped });
       })
-      .catch(() => toast.error("Failed to load settings"))
+      .catch(() =>
+        toast({
+          title: "Failed to load settings",
+          variant: "destructive",
+        })
+      )
       .finally(() => setLoading(false));
   }, [token, form]);
 
