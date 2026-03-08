@@ -79,6 +79,17 @@ class RateLimiter:
         self.user_buckets.default_factory = lambda: TokenBucket(self.user_capacity, self.user_refill)
         self.guild_buckets.default_factory = lambda: TokenBucket(self.guild_capacity, self.guild_refill)
 
+        # Update existing buckets as well
+        for bucket in self.user_buckets.values():
+            bucket.capacity = self.user_capacity
+            bucket.refill_rate = self.user_refill
+            bucket.tokens = min(bucket.tokens, bucket.capacity) # Cap tokens to new capacity
+
+        for bucket in self.guild_buckets.values():
+            bucket.capacity = self.guild_capacity
+            bucket.refill_rate = self.guild_refill
+            bucket.tokens = min(bucket.tokens, bucket.capacity) # Cap tokens to new capacity
+
     def is_allowed(self, user_id: str, guild_id: str | None = None) -> Tuple[bool, str]:
         """
         Check if a request is allowed.
