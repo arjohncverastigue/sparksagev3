@@ -16,6 +16,7 @@ import {
 interface ChannelListProps {
   channels: ChannelItem[];
   onDelete: (channelId: string) => void;
+  channelNamesMap: Map<string, string>;
 }
 
 function formatDate(dateStr: string) {
@@ -23,7 +24,7 @@ function formatDate(dateStr: string) {
   return date.toLocaleString();
 }
 
-export function ChannelList({ channels, onDelete }: ChannelListProps) {
+export function ChannelList({ channels, onDelete, channelNamesMap }: ChannelListProps) {
   if (channels.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -36,7 +37,7 @@ export function ChannelList({ channels, onDelete }: ChannelListProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Channel ID</TableHead>
+          <TableHead>Channel Name</TableHead>
           <TableHead className="text-right">Messages</TableHead>
           <TableHead>Last Activity</TableHead>
           <TableHead className="w-12" />
@@ -50,7 +51,7 @@ export function ChannelList({ channels, onDelete }: ChannelListProps) {
                 href={`/dashboard/conversations/${ch.channel_id}`}
                 className="font-mono text-sm text-primary hover:underline"
               >
-                #{ch.channel_id}
+                {channelNamesMap.get(ch.channel_id) || `#${ch.channel_id}`}
               </Link>
             </TableCell>
             <TableCell className="text-right">{ch.message_count}</TableCell>
