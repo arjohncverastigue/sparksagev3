@@ -105,17 +105,22 @@ class SparkSageBot(commands.Bot):
         except RuntimeError as e:
             return f"Sorry, all AI providers failed:\n{e}", "none"
 
-    async def update_rate_limiter_config(self):
-        """Reload config and update rate limiter capacities if enabled."""
-        # config module has already been reloaded in _reload_config in api/routes/config.py
-        # We now just read the updated values directly.
-        print(f"DEBUG: bot.update_rate_limiter_config - config.RATE_LIMIT_USER (current): {config.RATE_LIMIT_USER}")
-        print(f"DEBUG: bot.update_rate_limiter_config - config.RATE_LIMIT_GUILD (current): {config.RATE_LIMIT_GUILD}")
+    async def update_rate_limiter_config(self, all_config: dict[str, str]):
+        """Update rate limiter capacities from the provided config dictionary."""
+        # We assume all_config already contains the latest values from the DB.
+        # Ensure conversion to int, as values in all_config are strings.
+        user_limit = int(all_config.get("RATE_LIMIT_USER", config.RATE_LIMIT_USER))
+        guild_limit = int(all_config.get("RATE_LIMIT_GUILD", config.RATE_LIMIT_GUILD))
+        rate_limiting_enabled = all_config.get("RATE_LIMITING_ENABLED", "True").lower() == "true"
 
-        if config.RATE_LIMITING_ENABLED and hasattr(self, "rate_limiter"):
+        print(f"DEBUG: bot.update_rate_limiter_config - user_limit from all_config: {user_limit}")
+        print(f"DEBUG: bot.update_rate_limiter_config - guild_limit from all_config: {guild_limit}")
+        print(f"DEBUG: bot.update_rate_limiter_config - rate_limiting_enabled from all_config: {rate_limiting_enabled}")
+
+        if rate_limiting_enabled and hasattr(self, "rate_limiter"):
             self.rate_limiter.update_capacities(
-                user_rate=config.RATE_LIMIT_USER,
-                guild_rate=config.RATE_LIMIT_GUILD,
+                user_rate=user_limit,
+                guild_rate=guild_limit,
             )
             print("Rate limiter capacities updated from config.")
             print(f"DEBUG: bot.update_rate_limiter_config - rate_limiter.user_capacity: {self.rate_limiter.user_capacity}")
